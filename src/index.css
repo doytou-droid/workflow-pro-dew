@@ -3,7 +3,14 @@
 /* ทำให้ Dark mode ควบคุมด้วย class "dark" (ใช้กับปุ่มสลับธีม) */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ฟอนต์หลักของเว็บ */
 @theme {
+  /* ฟอนต์หลักของเว็บ */
   --font-sans: "Prompt", sans-serif;
+
+  /* สีธีมหลัก (ภายหลังแอดมินปรับได้ในหลังบ้าน) */
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
 }

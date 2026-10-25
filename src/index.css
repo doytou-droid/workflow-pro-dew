@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* ทำให้ Dark mode ควบคุมด้วย class "dark" (ใช้กับปุ่มสลับธีม) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ฟอนต์หลักของเว็บ */
+@theme {
+  --font-sans: "Prompt", sans-serif;
+}

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { STATUSES, PRIORITIES } from '../utils/taskConfig'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../firebase/config'
 import { todayStr } from '../utils/date'
 import Alert from './Alert'
 
@@ -8,22 +9,65 @@ const inputCls =
   'w-full px-3.5 py-2.5 text-base bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500'
 
 export default function TaskModal({ task, onSave, onClose }) {
+  const [config, setConfig] = useState({
+    statuses: ['ยังไม่เริ่ม', 'กำลังดำเนินการ', 'รอตรวจทาน', 'เสร็จสิ้น'],
+    priorities: ['ต่ำ', 'ปานกลาง', 'สูง', 'เร่งด่วน'],
+    categories: ['ทั่วไป', 'พัฒนาเว็บ', 'ออกแบบ', 'เอกสาร'],
+    assignees: ['กิตติพงษ์ โค้ดเดอร์', 'ปณิธิ คูตระกูล'],
+  })
+
+  // โหลดตัวเลือกจาก Firestore
+  useEffect(() => {
+    getDoc(doc(db, 'settings', 'dropdowns')).then((snap) => {
+      if (snap.exists()) setConfig(snap.data())
+    }).catch(() => {})
+  }, [])
+
+  // จัดการสถานะ Custom (ถ้าเลือก "อื่นๆ..." ให้เปิดช่องพิมพ์เอง)
   const [form, setForm] = useState({
     title: task?.title || '',
     description: task?.description || '',
     status: task?.status || 'ยังไม่เริ่ม',
     priority: task?.priority || 'ปานกลาง',
-    category: task?.category || '',
-    assignee: task?.assignee || '',
+    category: task?.category || 'ทั่วไป',
+    assignee: task?.assignee || 'ไม่ระบุ',
     dueDate: task?.dueDate || todayStr(),
     dueTime: task?.dueTime || '18:00',
   })
+
+  const [customCategory, setCustomCategory] = useState('')
+  const [customAssignee, setCustomAssignee] = useState('')
+  const [isOtherCategory, setIsOtherCategory] = useState(false)
+  const [isOtherAssignee, setIsOtherAssignee] = useState(false)
+
   const [subtasks, setSubtasks] = useState(task?.subtasks || [])
   const [subInput, setSubInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  function handleCategoryChange(e) {
+    const val = e.target.value
+    if (val === '__OTHER__') {
+      setIsOtherCategory(true)
+      setForm((f) => ({ ...f, category: '' }))
+    } else {
+      setIsOtherCategory(false)
+      setForm((f) => ({ ...f, category: val }))
+    }
+  }
+
+  function handleAssigneeChange(e) {
+    const val = e.target.value
+    if (val === '__OTHER__') {
+      setIsOtherAssignee(true)
+      setForm((f) => ({ ...f, assignee: '' }))
+    } else {
+      setIsOtherAssignee(false)
+      setForm((f) => ({ ...f, assignee: val }))
+    }
+  }
 
   function addSub() {
     const t = subInput.trim()
@@ -45,8 +89,8 @@ export default function TaskModal({ task, onSave, onClose }) {
         ...form,
         title: form.title.trim(),
         description: form.description.trim(),
-        category: form.category.trim() || 'ทั่วไป',
-        assignee: form.assignee.trim() || 'ไม่ระบุ',
+        category: isOtherCategory ? (customCategory.trim() || 'ทั่วไป') : (form.category || 'ทั่วไป'),
+        assignee: isOtherAssignee ? (customAssignee.trim() || 'ไม่ระบุ') : (form.assignee || 'ไม่ระบุ'),
         subtasks,
       })
       onClose()
@@ -82,23 +126,48 @@ export default function TaskModal({ task, onSave, onClose }) {
             <div>
               <label className="block text-sm font-medium mb-1">สถานะ</label>
               <select className={inputCls} value={form.status} onChange={set('status')}>
-                {STATUSES.map((s) => <option key={s}>{s}</option>)}
+                {config.statuses.map((s) => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">ความสำคัญ</label>
               <select className={inputCls} value={form.priority} onChange={set('priority')}>
-                {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
+                {config.priorities.map((p) => <option key={p}>{p}</option>)}
               </select>
             </div>
+
+            {/* หมวดหมู่ (Dropdown + อื่นๆ) */}
             <div>
               <label className="block text-sm font-medium mb-1">หมวดหมู่</label>
-              <input className={inputCls} value={form.category} onChange={set('category')} placeholder="เช่น ออกแบบ" />
+              {!isOtherCategory ? (
+                <select className={inputCls} value={form.category} onChange={handleCategoryChange}>
+                  {config.categories.map((c) => <option key={c}>{c}</option>)}
+                  <option value="__OTHER__">+ เพิ่มอื่นๆ (พิมพ์เอง)...</option>
+                </select>
+              ) : (
+                <div className="flex gap-2">
+                  <input className={inputCls} value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder="พิมพ์หมวดหมู่ใหม่..." autoFocus />
+                  <button type="button" onClick={() => setIsOtherCategory(false)} className="px-3 rounded-xl bg-slate-200 dark:bg-slate-600 text-xs font-semibold">กลับ</button>
+                </div>
+              )}
             </div>
+
+            {/* ผู้รับผิดชอบ (Dropdown + อื่นๆ) */}
             <div>
               <label className="block text-sm font-medium mb-1">ผู้รับผิดชอบ</label>
-              <input className={inputCls} value={form.assignee} onChange={set('assignee')} />
+              {!isOtherAssignee ? (
+                <select className={inputCls} value={form.assignee} onChange={handleAssigneeChange}>
+                  {config.assignees.map((a) => <option key={a}>{a}</option>)}
+                  <option value="__OTHER__">+ เพิ่มอื่นๆ (พิมพ์เอง)...</option>
+                </select>
+              ) : (
+                <div className="flex gap-2">
+                  <input className={inputCls} value={customAssignee} onChange={(e) => setCustomAssignee(e.target.value)} placeholder="พิมพ์ชื่อผู้รับผิดชอบใหม่..." autoFocus />
+                  <button type="button" onClick={() => setIsOtherAssignee(false)} className="px-3 rounded-xl bg-slate-200 dark:bg-slate-600 text-xs font-semibold">กลับ</button>
+                </div>
+              )}
             </div>
+
             <div>
               <label className="block text-sm font-medium mb-1">วันที่ส่ง *</label>
               <input type="date" className={inputCls} value={form.dueDate} onChange={set('dueDate')} required />

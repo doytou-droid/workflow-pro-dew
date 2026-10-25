@@ -1,5 +1,6 @@
 import { Menu, Moon, Sun, LogOut } from 'lucide-react'
 import { roleLabels } from '../utils/permissions'
+import NotificationBell from './NotificationBell'
 
 export default function Header({ profile, dark, onToggleTheme, onOpenMenu, onLogout }) {
   return (
@@ -23,6 +24,7 @@ export default function Header({ profile, dark, onToggleTheme, onOpenMenu, onLog
             {roleLabels[profile.role] || profile.role}
           </div>
         </div>
+        <NotificationBell />
         <button
           onClick={onToggleTheme}
           className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"

@@ -190,7 +190,7 @@ export default function Tasks() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {list.map((t) => {
-                  const editable = canModify(t, role, user.uid)
+                  const editable = canModify(t, role, user.uid, profile)
                   const overdue = isOverdue(t)
                   const done = t.status === 'เสร็จสิ้น'
                   return (
@@ -254,7 +254,7 @@ export default function Tasks() {
           {/* มือถือ: การ์ด */}
           <div className="md:hidden space-y-3">
             {list.map((t) => {
-              const editable = canModify(t, role, user.uid)
+              const editable = canModify(t, role, user.uid, profile)
               const overdue = isOverdue(t)
               const done = t.status === 'เสร็จสิ้น'
               return (

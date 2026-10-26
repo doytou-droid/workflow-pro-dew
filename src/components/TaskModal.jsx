@@ -4,6 +4,8 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { todayStr } from '../utils/date'
 import Alert from './Alert'
+import ThaiDateInput from './ThaiDateInput'
+import TimeInput24 from './TimeInput24'
 
 const inputCls =
   'w-full px-3.5 py-2.5 text-base bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500'
@@ -13,13 +15,13 @@ export default function TaskModal({ task, onSave, onClose }) {
     statuses: ['ยังไม่เริ่ม', 'กำลังดำเนินการ', 'รอตรวจทาน', 'เสร็จสิ้น'],
     priorities: ['ต่ำ', 'ปานกลาง', 'สูง', 'เร่งด่วน'],
     categories: ['ทั่วไป', 'พัฒนาเว็บ', 'ออกแบบ', 'เอกสาร'],
-    assignees: ['กิตติพงษ์ โค้ดเดอร์', 'ปณิธิ คูตระกูล'],
+    assignees: [ 'ปณิธิ คูตระกูล'],
   })
 
   // โหลดตัวเลือกจาก Firestore
   useEffect(() => {
     getDoc(doc(db, 'settings', 'dropdowns')).then((snap) => {
-      if (snap.exists()) setConfig(snap.data())
+      if (snap.exists()) setConfig((c) => ({ ...c, ...snap.data() }))
     }).catch(() => {})
   }, [])
 
@@ -169,13 +171,13 @@ export default function TaskModal({ task, onSave, onClose }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">วันที่ส่ง *</label>
-              <input type="date" className={inputCls} value={form.dueDate} onChange={set('dueDate')} required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">เวลาที่ส่ง</label>
-              <input type="time" className={inputCls} value={form.dueTime} onChange={set('dueTime')} />
-            </div>
+  <label className="block text-sm font-medium mb-1">วันที่ส่ง (วัน/เดือน/ปี พ.ศ.) *</label>
+  <ThaiDateInput className={inputCls} value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))} />
+</div>
+<div>
+  <label className="block text-sm font-medium mb-1">เวลาที่ส่ง (24 ชม.)</label>
+  <TimeInput24 className={inputCls} value={form.dueTime} onChange={(v) => setForm((f) => ({ ...f, dueTime: v }))} />
+</div>
           </div>
 
           <div className="border-t border-slate-100 dark:border-slate-700 pt-4 space-y-2">

@@ -2,19 +2,23 @@ import { useMemo, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useTasks } from '../hooks/useTasks'
+import { useDropdownConfig } from '../hooks/useDropdownConfig'
 import { createTask, updateTask, deleteTask } from '../firebase/tasks'
 import { canCreate, canModify } from '../utils/taskAccess'
-import { STATUSES, priorityStyle, calcProgress } from '../utils/taskConfig'
+import { priorityStyle, calcProgress } from '../utils/taskConfig'
 import { formatThaiDate, isOverdue } from '../utils/date'
 import { filterTasks } from '../utils/filterUtils'
 import { getAvatarUrl } from '../utils/avatar'
 import TaskModal from '../components/TaskModal'
+import TaskDetailModal from '../components/TaskDetailModal'
 import GlobalFilters from '../components/GlobalFilters'
 import Alert from '../components/Alert'
 
 export default function Kanban() {
   const { user, profile, role } = useAuth()
   const { tasks, loading, error } = useTasks()
+  const config = useDropdownConfig()
+  const STATUSES = config.statuses || ['ยังไม่เริ่ม', 'กำลังดำเนินการ', 'รอตรวจทาน', 'เสร็จสิ้น']
 
   const [filters, setFilters] = useState({
     startDate: '',
@@ -50,6 +54,9 @@ export default function Kanban() {
 
   const [modal, setModal] = useState(null)
   const [actionError, setActionError] = useState('')
+  const [draggingId, setDraggingId] = useState(null)
+  const [viewTask, setViewTask] = useState(null)
+
 
   const filtered = useMemo(() => filterTasks(tasks, filters), [tasks, filters])
 
@@ -69,6 +76,7 @@ export default function Kanban() {
   }
 
   async function moveStatus(task, nextStatus) {
+    if (task.status === nextStatus) return
     setActionError('')
     try {
       await updateTask(task.id, { status: nextStatus })
@@ -82,7 +90,7 @@ export default function Kanban() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Kanban Board</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">บอร์ดแสดงสถานะงานแบบคอลัมน์</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">บอร์ดแสดงสถานะงานแบบคอลัมน์ ลากวางเพื่อเปลี่ยนสถานะได้</p>
         </div>
         {canCreate(role) && (
           <button
@@ -112,7 +120,20 @@ export default function Kanban() {
           {STATUSES.map((status) => {
             const list = filtered.filter((t) => t.status === status)
             return (
-              <div key={status} className="bg-slate-100/70 dark:bg-slate-800/60 rounded-2xl p-3 border border-slate-200/80 dark:border-slate-700">
+              <div
+                key={status}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  if (!draggingId) return
+                  const taskToMove = tasks.find((t) => t.id === draggingId)
+                  if (taskToMove) {
+                    const editable = canModify(taskToMove, role, user.uid, profile)
+                    if (editable) moveStatus(taskToMove, status)
+                  }
+                  setDraggingId(null)
+                }}
+                className="bg-slate-100/70 dark:bg-slate-800/60 rounded-2xl p-3 border border-slate-200/80 dark:border-slate-700 min-h-[200px]"
+              >
                 <div className="flex items-center justify-between px-2 mb-3">
                   <span className="font-bold text-sm">{status}</span>
                   <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white dark:bg-slate-700 shadow-xs">
@@ -122,18 +143,31 @@ export default function Kanban() {
 
                 <div className="space-y-3">
                   {list.map((t) => {
-                    const editable = canModify(t, role, user.uid)
+                    const editable = canModify(t, role, user.uid, profile)
                     const overdue = isOverdue(t)
                     const done = t.status === 'เสร็จสิ้น'
                     return (
                       <div
-                        key={t.id}
-                        className={`bg-white dark:bg-slate-800 rounded-xl p-4 border shadow-xs space-y-2.5 ${
+
+  key={t.id}
+
+  draggable={editable}
+
+  onDragStart={() => setDraggingId(t.id)}
+
+  onDragEnd={() => setDraggingId(null)}
+
+  onClick={() => setViewTask(t)} // <-- เพิ่มตรงนี้เพื่อให้คลิกเปิดดูรายละเอียดได้
+
+  className={`bg-white dark:bg-slate-800 rounded-xl p-4 border shadow-xs space-y-2.5 transition-opacity cursor-pointer ${
+
+    editable ? 'active:cursor-grabbing' : ''
+                        } ${draggingId === t.id ? 'opacity-40' : 'opacity-100'} ${
                           done ? 'border-emerald-500' : overdue ? 'border-rose-400' : 'border-slate-200 dark:border-slate-700'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${priorityStyle[t.priority]}`}>
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${priorityStyle[t.priority] || 'bg-slate-100 text-slate-600'}`}>
                             {t.priority}
                           </span>
                           {editable && (
@@ -156,10 +190,11 @@ export default function Kanban() {
                         </div>
 
                         <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700 text-xs">
-                          <div className="flex items-center gap-1.5 text-slate-500">
-                            <img src={getAvatarUrl(t.assignee, t.assigneePhoto)} alt={t.assignee} className="w-5 h-5 rounded-full object-cover bg-slate-100" />
-                            <span className="truncate max-w-24">{t.assignee || 'ไม่ระบุ'}</span>
+                          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                            <img src={getAvatarUrl(t.assignee, t.assigneePhoto)} alt={t.assignee} className="w-8 h-8 rounded-full object-cover bg-slate-100" />
+                            <span className="truncate max-w-40 text-sm font-medium">{t.assignee || 'ไม่ระบุ'}</span>
                           </div>
+
                           <span className={overdue ? 'text-rose-600 font-semibold' : 'text-slate-400'}>
                             {formatThaiDate(t.dueDate)}
                           </span>
@@ -182,7 +217,7 @@ export default function Kanban() {
                   })}
                   {list.length === 0 && (
                     <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-                      ไม่มีงาน
+                      ไม่มีงาน (ลากการ์ดมาวางได้)
                     </div>
                   )}
                 </div>
@@ -197,6 +232,17 @@ export default function Kanban() {
           task={modal === 'new' ? null : modal}
           onSave={handleSave}
           onClose={() => setModal(null)}
+        />
+      )}
+            {viewTask && (
+        <TaskDetailModal
+          task={viewTask}
+          onClose={() => setViewTask(null)}
+          onToggleSubtask={async (task, subId) => {
+            const updatedSubtasks = task.subtasks.map(s => s.id === subId ? { ...s, completed: !s.completed } : s)
+            await updateTask(task.id, { subtasks: updatedSubtasks })
+            setViewTask(prev => ({ ...prev, subtasks: updatedSubtasks }))
+          }}
         />
       )}
     </div>
